@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blockbuster - Recomendador de Películas</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #111827;
+            color: #ffffff;
+        }
+
+        /* Animaciones personalizadas */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .poster-card {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .poster-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 25px rgba(250, 204, 21, 0.4);
+            border-color: #facc15;
+        }
+
+        .poster-card.selected {
+            border: 4px solid #facc15;
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(250, 204, 21, 0.6);
+        }
+
+        .poster-card.selected::after {
+            content: '\f00c';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #facc15;
+            color: #111827;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, #facc15 0%, #eab308 100%);
+            color: #111827;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(90deg, #fde047 0%, #ca8a04 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(250, 204, 21, 0.4);
+        }
+
+        .tag-select {
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .tag-select:hover {
+            background-color: #374151;
+        }
+
+        .tag-select.active {
+            background-color: #facc15;
+            color: #111827;
+            border-color: #facc15;
+        }
+
+        /* Platform Badge */
+        .platform-badge {
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header Simple -->
+    <header class="p-6 flex justify-between items-center bg-gray-900 shadow-lg border-b border-gray-800 sticky top-0 z-50">
+        <div class="flex items-center gap-2 cursor-pointer" onclick="location.reload()">
+            <i class="fas fa-ticket text-yellow-500 text-3xl"></i>
+            <h1 class="text-2xl font-bold tracking-wider">Block<span class="text-yellow-500">buster</span></h1>
+        </div>
+        <div id="user-display" class="hidden text-sm font-light text-gray-400">
+            Hola, <span id="display-name" class="font-bold text-white"></span>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main id="app-container" class="flex-grow container mx-auto px-4 py-8 max-w-5xl flex items-center justify-center">
+        <!-- El contenido se inyectará aquí dinámicamente -->
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center p-4 text-gray-500 text-sm">
+        &copy; 2023 Blockbuster AI. Diseñado para cinéfilos.
+    </footer>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // --- BASE DE DATOS MOCK ---
+        // En una app real, esto vendría de una API (TMDB, IMDB)
+        const dbGenres = [
+            { id: 'action', name: 'Acción', icon: 'fa-fire' },
+            { id: 'sci-fi', name: 'Ciencia Ficción', icon: 'fa-rocket' },
+            { id: 'drama', name: 'Drama', icon: 'fa-masks-theater' },
+            { id: 'comedy', name: 'Comedia', icon: 'fa-face-laugh-beam' },
+            { id: 'horror', name: 'Terror', icon: 'fa-ghost' },
+            { id: 'romance', name: 'Romance', icon: 'fa-heart' },
+            { id: 'adventure', name: 'Aventura', icon: 'fa-map' },
+            { id: 'fantasy', name: 'Fantasía', icon: 'fa-dragon' }
+        ];
+
+        const dbActors = [
+            { id: 'leo', name: 'Leonardo DiCaprio' },
+            { id: 'scarlett', name: 'Scarlett Johansson' },
+            { id: 'rock', name: 'Dwayne Johnson' },
+            { id: 'denzel', name: 'Denzel Washington' },
+            { id: 'margot', name: 'Margot Robbie' },
+            { id: 'keanu', name: 'Keanu Reeves' },
+            { id: 'zendaya', name: 'Zendaya' },
+            { id: 'rdj', name: 'Robert Downey Jr.' },
+            { id: 'brad', name: 'Brad Pitt' },
+            { id: 'meryl', name: 'Meryl Streep' },
+            { id: 'tomc', name: 'Tom Cruise' },
+            { id: 'emmastone', name: 'Emma Stone' },
+            { id: 'will', name: 'Will Smith' },
+            { id: 'charlize', name: 'Charlize Theron' },
+            { id: 'joaquin', name: 'Joaquin Phoenix' },
+            { id: 'florence', name: 'Florence Pugh' }
+        ];
+
+        // Películas para elegir en la fase 3 (Vibe check)
+        // Se usan enlaces de alta disponibilidad de TMDB
+        const dbSeedMovies = [
+            { id: 'interstellar', title: 'Interstellar', genre: 'sci-fi', vibe: 'mind-bending', img: 'https://m.media-amazon.com/images/M/MV5BYzdjMDAxZGItMjI2My00ODA1LTlkNzItOWFjMDU5ZDJlYWY3XkEyXkFqcGc@._V1_.jpg' },
+            { id: 'lalaland', title: 'La La Land', genre: 'romance', vibe: 'emotional', img: 'https://moviepostermexico.com/cdn/shop/products/la_la_land_ver8_xxlg_2048x.jpg?v=1571355800' },
+            { id: 'johnwick', title: 'John Wick', genre: 'action', vibe: 'intense', img: 'https://m.media-amazon.com/images/I/41+aJYnjo0L._AC_UF894,1000_QL80_.jpg' },
+            { id: 'getout', title: 'Get Out', genre: 'horror', vibe: 'psychological', img: 'https://image.tmdb.org/t/p/w500/tFXcEccSQMf3lfhfXKSU9iRBpa3.jpg' },
+            { id: 'pulpfiction', title: 'Pulp Fiction', genre: 'drama', vibe: 'classic', img: 'https://image.tmdb.org/t/p/w500/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg' },
+            { id: 'spiritedaway', title: 'El Viaje de Chihiro', genre: 'fantasy', vibe: 'magical', img: 'https://http2.mlstatic.com/D_998460-MLA74898567104_032024-O.jpg' },
+            { id: 'parasite', title: 'Parásitos', genre: 'drama', vibe: 'psychological', img: 'https://image.tmdb.org/t/p/original/5N5v0BipcnasK9HACuoCWnFdZmh.jpg' },
+            { id: 'madmax', title: 'Mad Max: Fury Road', genre: 'action', vibe: 'intense', img: 'https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/904f6170042969.5b96d5b721c81.gif' }
+        ];
+
+        // Base de datos de resultados posibles (Precios actualizados a ARS)
+        const recommendationsDB = [
+            { 
+                title: "Inception", 
+                genres: ['sci-fi', 'action'], 
+                actors: ['leo'], 
+                vibe: 'mind-bending', 
+                desc: "Dom Cobb es un ladrón con una extraña habilidad: entrar a los sueños de la gente y robarles los secretos de sus subconscientes. Su habilidad le ha vuelto muy popular en el mundo del espionaje corporativo, pero ha tenido un gran coste en la gente que ama.", 
+                img: "https://image.tmdb.org/t/p/w500/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg", 
+                platforms: ['Netflix', 'HBO Max'],
+                price: '$ 4.500'
+            },
+            { 
+                title: "The Matrix", 
+                genres: ['sci-fi', 'action'], 
+                actors: ['keanu'], 
+                vibe: 'mind-bending', 
+                desc: "Thomas Anderson lleva una doble vida: por el día es programador en una importante empresa de software, y por la noche un hacker informático llamado Neo. Su vida cambiará cuando reciba un misterioso mensaje: Matrix te posee.", 
+                img: "https://image.tmdb.org/t/p/w500/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg", 
+                platforms: ['HBO Max', 'Movistar+'],
+                price: '$ 3.200'
+            },
+            { 
+                title: "Titanic", 
+                genres: ['romance', 'drama'], 
+                actors: ['leo'], 
+                vibe: 'emotional', 
+                desc: "Jack, un joven artista, gana en una partida de cartas un pasaje para viajar a América en el Titanic, el transatlántico más grande y seguro jamás construido. A bordo conoce a Rose, una joven de una buena familia venida a menos.", 
+                img: "https://image.tmdb.org/t/p/w500/9xjZS2rlVxm8SFx8kPC3aIGCOYQ.jpg", 
+                platforms: ['Disney+', 'Amazon Prime'],
+                price: '$ 4.500'
+            },
+            { 
+                title: "Black Widow", 
+                genres: ['action', 'adventure'], 
+                actors: ['scarlett', 'rdj'], 
+                vibe: 'intense', 
+                desc: "Natasha Romanoff, alias Viuda Negra, se enfrenta a los capítulos más oscuros de su historia cuando surge una peligrosa conspiración relacionada con su pasado. Perseguida por una fuerza que no se detendrá ante nada para acabar con ella.", 
+                img: "https://image.tmdb.org/t/p/w500/qAZ0pzat24kLdO3o8ejmbLxyOac.jpg", 
+                platforms: ['Disney+'],
+                price: '$ 5.500'
+            },
+            { 
+                title: "Jumanji: Welcome to the Jungle", 
+                genres: ['comedy', 'adventure'], 
+                actors: ['rock'], 
+                vibe: 'fun', 
+                desc: "Cuatro compañeros de instituto descubren un vieja consola de videojuegos con un juego del que nunca habían oído hablar, Jumanji, y se sienten inmediatamente atraídos por la ambientación de selva del juego, para entonces convertirse en los avatares.", 
+                img: "https://image.tmdb.org/t/p/w500/b1C0FuXp4wiPmHLLeODnYDpZjLo.jpg", 
+                platforms: ['Netflix', 'Amazon Prime'],
+                price: '$ 4.500'
+            },
+            { 
+                title: "Barbie", 
+                genres: ['comedy', 'fantasy'], 
+                actors: ['margot'], 
+                vibe: 'fun', 
+                desc: "Barbie lleva una vida ideal en Barbieland, allí todo es perfecto, con chupi fiestas llenas de música y color, y todos los días son el mejor día. Claro que Barbie se hace algunas preguntas, cuestiones bastante incómodas que no encajan con el mundo idílico.", 
+                img: "https://image.tmdb.org/t/p/w500/iuFNMS8U5cb6xfzi51Dbkovj7vM.jpg", 
+                platforms: ['HBO Max'],
+                price: '$ 5.500'
+            },
+            { 
+                title: "Hereditary", 
+                genres: ['horror', 'drama'], 
+                actors: [], 
+                vibe: 'psychological', 
+                desc: "Cosas extrañas comienzan a suceder en casa de los Graham tras la muerte de la abuela y matriarca, que deja a su hija Annie en herencia su casa. Annie Graham, una galerista casada y con dos hijos, no tuvo una infancia demasiado feliz junto a su madre.", 
+                img: "https://image.tmdb.org/t/p/w500/p9fopC3SrN3J11F6gQc8yZ6gJ.jpg", 
+                platforms: ['Amazon Prime', 'Filmin'],
+                price: '$ 3.200'
+            },
+            { 
+                title: "Joker", 
+                genres: ['drama', 'crime'], 
+                actors: ['joaquin'], 
+                vibe: 'psychological', 
+                desc: "Arthur Fleck vive en Gotham con su madre, y su única motivación en la vida es hacer reír a la gente. Actúa haciendo de payaso en pequeños trabajos, pero tiene problemas mentales que hacen que la gente le vea como un bicho raro.", 
+                img: "https://image.tmdb.org/t/p/w500/udDclJoHjfjb8EkGsdr7FD7UyuY.jpg", 
+                platforms: ['HBO Max', 'Netflix'],
+                price: '$ 4.500'
+            },
+            { 
+                title: "Midsommar", 
+                genres: ['horror', 'drama'], 
+                actors: ['florence'], 
+                vibe: 'psychological', 
+                desc: "Una pareja estadounidense que no está pasando por su mejor momento acude con unos amigos al Midsommar, un festival de verano que se celebra cada 90 años en una aldea remota de Suecia. Lo que comienza como unas vacaciones de ensueño se tuerce.", 
+                img: "https://image.tmdb.org/t/p/w500/7LEI8ulZzO5gy9Ww2NjoUbW4Vfa.jpg", 
+                platforms: ['Amazon Prime'],
+                price: '$ 3.200'
+            },
+            { 
+                title: "Once Upon a Time... in Hollywood", 
+                genres: ['comedy', 'drama'], 
+                actors: ['brad', 'leo', 'margot'], 
+                vibe: 'classic', 
+                desc: "Hollywood, años 60. La estrella de un western televisivo, Rick Dalton, intenta amoldarse a los cambios del medio al mismo tiempo que su doble. La vida de Dalton está ligada completamente a Hollywood, y es vecino de la joven y prometedora actriz Sharon Tate.", 
+                img: "https://image.tmdb.org/t/p/w500/8j58iSEQq6WchhiGetZldB5u2p.jpg", 
+                platforms: ['Netflix', 'Amazon Prime'],
+                price: '$ 4.500'
+            }
+        ];
+
+        // --- ESTADO DE LA APP ---
+        const state = {
+            step: 0,
+            userData: {
+                name: '',
+                genres: [],
+                actors: [],
+                vibeMovies: []
+            },
+            currentRecommendations: []
+        };
+
+        const appContainer = document.getElementById('app-container');
+        const displayName = document.getElementById('display-name');
+        const userDisplay = document.getElementById('user-display');
+
+        // --- FUNCIONES DE NAVEGACIÓN ---
+
+        function init() {
+            renderStep0();
+        }
+
+        // Paso 0: Nombre
+        function renderStep0() {
+            appContainer.innerHTML = `
+                <div class="w-full max-w-md bg-gray-800 p-8 rounded-2xl shadow-2xl text-center fade-in">
+                    <h2 class="text-3xl font-bold mb-4">Bienvenido a Blockbuster</h2>
+                    <p class="text-gray-400 mb-8">Descubre tu próxima película favorita en segundos.</p>
+                    
+                    <div class="mb-6 text-left">
+                        <label class="block text-gray-300 text-sm font-bold mb-2" for="username">
+                            ¿Cómo te llamas?
+                        </label>
+                        <input class="shadow appearance-none border border-gray-600 rounded w-full py-3 px-4 text-white bg-gray-700 leading-tight focus:outline-none focus:border-yellow-500 transition" 
+                            id="username" type="text" placeholder="Tu nombre...">
+                    </div>
+
+                    <button onclick="saveName()" class="w-full btn-primary font-bold py-3 px-4 rounded-full shadow-lg">
+                        Comenzar <i class="fas fa-arrow-right ml-2"></i>
+                    </button>
+                </div>
+            `;
+        }
+
+        function saveName() {
+            const input = document.getElementById('username');
+            if (input.value.trim() === '') {
+                input.classList.add('border-yellow-500');
+                return;
+            }
+            state.userData.name = input.value;
+            displayName.innerText = state.userData.name;
+            userDisplay.classList.remove('hidden');
+            state.step = 1;
+            renderStep1();
+        }
+
+        // Paso 1: Géneros
+        function renderStep1() {
+            let genreHtml = dbGenres.map(g => `
+                <div onclick="toggleGenre('${g.id}', this)" class="tag-select border border-gray-600 rounded-xl p-4 flex flex-col items-center justify-center gap-2 h-32 ${state.userData.genres.includes(g.id) ? 'active' : ''}">
+                    <i class="fas ${g.icon} text-2xl mb-1"></i>
+                    <span class="font-medium">${g.name}</span>
+                </div>
+            `).join('');
+
+            appContainer.innerHTML = `
+                <div class="w-full fade-in text-center">
+                    <h2 class="text-3xl font-bold mb-2">¿Qué te apetece ver hoy?</h2>
+                    <p class="text-gray-400 mb-8">Selecciona uno o más géneros</p>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                        ${genreHtml}
+                    </div>
+
+                    <div class="flex justify-between">
+                         <button onclick="renderStep0()" class="text-gray-400 hover:text-white px-6">Atrás</button>
+                        <button onclick="validateStep1()" class="btn-primary font-bold py-3 px-8 rounded-full shadow-lg">
+                            Siguiente <i class="fas fa-arrow-right ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleGenre(id, el) {
+            el.classList.toggle('active');
+            if (state.userData.genres.includes(id)) {
+                state.userData.genres = state.userData.genres.filter(g => g !== id);
+            } else {
+                state.userData.genres.push(id);
+            }
+        }
+
+        function validateStep1() {
+            if (state.userData.genres.length === 0) {
+                alert("Por favor selecciona al menos un género.");
+                return;
+            }
+            state.step = 2;
+            renderStep2();
+        }
+
+        // Paso 2: Actores
+        function renderStep2() {
+            let actorsHtml = dbActors.map(a => `
+                <div onclick="toggleActor('${a.id}', this)" class="tag-select border border-gray-600 rounded-full px-4 py-2 text-sm md:text-base text-center truncate ${state.userData.actors.includes(a.id) ? 'active' : ''}">
+                    ${a.name}
+                </div>
+            `).join('');
+
+            appContainer.innerHTML = `
+                <div class="w-full fade-in text-center max-w-3xl">
+                    <h2 class="text-3xl font-bold mb-2">Actores Favoritos</h2>
+                    <p class="text-gray-400 mb-8">¿Te gusta alguno de estos? (Opcional)</p>
+                    
+                    <div class="flex flex-wrap justify-center gap-3 mb-10">
+                        ${actorsHtml}
+                    </div>
+
+                    <div class="flex justify-between mt-8">
+                         <button onclick="renderStep1()" class="text-gray-400 hover:text-white px-6">Atrás</button>
+                        <button onclick="renderStep3()" class="btn-primary font-bold py-3 px-8 rounded-full shadow-lg">
+                            Siguiente <i class="fas fa-arrow-right ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleActor(id, el) {
+            el.classList.toggle('active');
+            if (state.userData.actors.includes(id)) {
+                state.userData.actors = state.userData.actors.filter(a => a !== id);
+            } else {
+                state.userData.actors.push(id);
+            }
+        }
+
+        // Paso 3: Selección de Pósters (Vibe Check)
+        function renderStep3() {
+            let moviesHtml = dbSeedMovies.map(m => `
+                <div onclick="toggleSeedMovie('${m.id}', this)" class="poster-card cursor-pointer rounded-lg relative aspect-[2/3] ${state.userData.vibeMovies.includes(m.id) ? 'selected' : ''}">
+                    <img src="${m.img}" alt="${m.title}" class="w-full h-full object-cover rounded-lg opacity-80 hover:opacity-100">
+                    <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4">
+                        <h3 class="font-bold text-lg text-shadow">${m.title}</h3>
+                    </div>
+                </div>
+            `).join('');
+
+            appContainer.innerHTML = `
+                <div class="w-full fade-in text-center">
+                    <h2 class="text-3xl font-bold mb-2">Refina tu gusto</h2>
+                    <p class="text-gray-400 mb-8">Selecciona las películas que te llamen la atención visualmente</p>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                        ${moviesHtml}
+                    </div>
+
+                    <div class="flex justify-between">
+                         <button onclick="renderStep2()" class="text-gray-400 hover:text-white px-6">Atrás</button>
+                        <button onclick="calculateAndShowResults()" class="btn-primary font-bold py-3 px-8 rounded-full shadow-lg">
+                            Ver Resultados <i class="fas fa-magic ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleSeedMovie(id, el) {
+            el.classList.toggle('selected');
+            if (state.userData.vibeMovies.includes(id)) {
+                state.userData.vibeMovies = state.userData.vibeMovies.filter(m => m !== id);
+            } else {
+                state.userData.vibeMovies.push(id);
+            }
+        }
+
+        // Lógica de Recomendación y Resultados
+        function calculateAndShowResults() {
+            // Loading simulado
+            appContainer.innerHTML = `
+                <div class="text-center fade-in">
+                    <i class="fas fa-circle-notch fa-spin text-5xl text-yellow-500 mb-4"></i>
+                    <h2 class="text-2xl font-bold">Analizando tus gustos...</h2>
+                </div>
+            `;
+
+            setTimeout(() => {
+                // Algoritmo simple
+                const scores = recommendationsDB.map(movie => {
+                    let score = 0;
+                    
+                    // Puntos por género
+                    movie.genres.forEach(g => {
+                        if (state.userData.genres.includes(g)) score += 5;
+                    });
+
+                    // Puntos por actor
+                    movie.actors.forEach(a => {
+                        if (state.userData.actors.includes(a)) score += 8;
+                    });
+
+                    // Puntos por "vibe" (basado en pelis seed seleccionadas)
+                    state.userData.vibeMovies.forEach(seedId => {
+                        const seed = dbSeedMovies.find(s => s.id === seedId);
+                        if (seed && movie.genres.includes(seed.genre)) score += 3;
+                    });
+
+                    return { ...movie, score };
+                });
+
+                scores.sort((a, b) => b.score - a.score);
+                state.currentRecommendations = scores.slice(0, 3);
+                
+                renderResultsList();
+            }, 1000);
+        }
+
+        function renderResultsList() {
+            const results = state.currentRecommendations;
+            let resultsHtml = '';
+            
+            if (results[0].score === 0) {
+                 resultsHtml = `<div class="col-span-full text-center text-gray-400 p-8 bg-gray-800 rounded-xl">
+                    <i class="fas fa-search mb-4 text-3xl"></i>
+                    <p>Tus gustos son muy únicos. Aquí tienes algunas de las mejor valoradas en general.</p>
+                 </div>`;
+            }
+
+            resultsHtml += results.map((m, index) => `
+                <div onclick="showMovieDetail(${index})" class="cursor-pointer group bg-gray-800 rounded-xl overflow-hidden shadow-xl flex flex-col md:flex-row fade-in transform transition hover:scale-[1.02]" style="animation-delay: ${index * 0.2}s">
+                    <div class="md:w-1/3 h-64 md:h-auto relative">
+                        <img src="${m.img}" class="w-full h-full object-cover">
+                        <div class="absolute top-2 left-2 bg-yellow-500 text-gray-900 text-xs font-bold px-2 py-1 rounded">
+                            ${Math.floor(80 + Math.random() * 20)}% Match
+                        </div>
+                    </div>
+                    <div class="p-6 md:w-2/3 flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-2xl font-bold mb-2 text-white group-hover:text-yellow-500 transition">${m.title}</h3>
+                            <div class="flex gap-2 mb-4">
+                                ${m.genres.map(g => `<span class="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300 uppercase tracking-wide">${g}</span>`).join('')}
+                            </div>
+                            <p class="text-gray-400 text-sm mb-4 leading-relaxed line-clamp-3">${m.desc}</p>
+                        </div>
+                        <button class="w-full border border-yellow-500 text-yellow-500 group-hover:bg-yellow-500 group-hover:text-gray-900 transition py-2 rounded font-semibold text-sm">
+                            <i class="fas fa-info-circle mr-2"></i> Ver Detalles
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            appContainer.innerHTML = `
+                <div class="w-full max-w-4xl fade-in">
+                    <div class="text-center mb-8">
+                        <h2 class="text-3xl font-bold mb-2">¡Listo, ${state.userData.name}!</h2>
+                        <p class="text-gray-400">Basado en tu selección, te recomendamos:</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 gap-6 mb-10">
+                        ${resultsHtml}
+                    </div>
+
+                    <div class="text-center">
+                        <button onclick="location.reload()" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-8 rounded-full transition">
+                            <i class="fas fa-redo mr-2"></i> Empezar de nuevo
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // NUEVA FUNCIÓN: Mostrar Detalle de Película
+        function showMovieDetail(index) {
+            const movie = state.currentRecommendations[index];
+            
+            // Generar iconos de plataformas
+            const platformsHtml = movie.platforms.map(p => {
+                let iconClass = 'fas fa-tv';
+                if(p.toLowerCase().includes('netflix')) iconClass = 'fas fa-play'; // Simulando icono
+                if(p.toLowerCase().includes('amazon')) iconClass = 'fab fa-amazon';
+                return `<div class="platform-badge"><i class="${iconClass}"></i> ${p}</div>`;
+            }).join('');
+
+            appContainer.innerHTML = `
+                <div class="w-full max-w-5xl fade-in bg-gray-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row">
+                    <!-- Columna Imagen -->
+                    <div class="md:w-1/3 relative">
+                        <img src="${movie.img}" class="w-full h-full object-cover">
+                    </div>
+                    
+                    <!-- Columna Info -->
+                    <div class="md:w-2/3 p-8 md:p-12 flex flex-col">
+                        <div class="mb-6">
+                            <h2 class="text-4xl font-bold text-white mb-2">${movie.title}</h2>
+                            <div class="flex gap-2 mb-4">
+                                ${movie.genres.map(g => `<span class="text-xs border border-gray-600 px-3 py-1 rounded-full text-gray-300 uppercase tracking-wide">${g}</span>`).join('')}
+                            </div>
+                        </div>
+
+                        <div class="mb-8 flex-grow">
+                            <h3 class="text-yellow-500 font-bold text-lg mb-2">Sinopsis</h3>
+                            <p class="text-gray-300 leading-relaxed text-lg">
+                                ${movie.desc}
+                            </p>
+                        </div>
+
+                        <div class="mb-8">
+                            <h3 class="text-gray-400 font-bold text-sm mb-3 uppercase tracking-wider">Disponible en:</h3>
+                            <div class="flex flex-wrap gap-2">
+                                ${platformsHtml}
+                            </div>
+                        </div>
+
+                        <div class="flex gap-4 mt-auto">
+                            <button onclick="alert('¡Película alquilada! Disfruta de la función.')" class="flex-1 btn-primary font-bold py-4 px-6 rounded-lg shadow-lg text-lg hover:scale-105 transition transform text-center">
+                                <i class="fas fa-shopping-cart mr-2"></i> Alquilar por ${movie.price}
+                            </button>
+                            <button onclick="renderResultsList()" class="px-6 py-4 rounded-lg border border-gray-600 text-gray-400 hover:text-white hover:border-white transition">
+                                Volver
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            // Scroll al top para ver el detalle completo
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Iniciar App
+        init();
+
+    </script>
+</body>
+</html>
